@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -203,6 +204,7 @@ public class NiivoStockDataApp {
 		log.info("Done");
 		log.info("Iterating over NSE Data set");
 		List<String> nseStockDataSet = IOUtils.readLines(new ByteArrayInputStream(nseScripsListFileContent), Charset.defaultCharset()).stream().skip(1).collect(Collectors.toList());
+		Collections.shuffle(nseStockDataSet);
 		
 		int total = nseStockDataSet.size();
 		List<Future<StockFileDownloadResult>> results = new ArrayList<>(total);
@@ -228,6 +230,7 @@ public class NiivoStockDataApp {
 		log.info("Downloading BSE Scrips List");
 		byte[] bseScripsListFileContent = bseScripListDownloaderService.getBseScripsListFileContent();
 		List<String> bseStockDataSet = IOUtils.readLines(new ByteArrayInputStream(bseScripsListFileContent), Charset.defaultCharset()).stream().skip(1).collect(Collectors.toList());
+		Collections.shuffle(bseStockDataSet);
 		
 		int total = bseStockDataSet.size();
 		List<Future<StockFileDownloadResult>> results = new ArrayList<>(total);
