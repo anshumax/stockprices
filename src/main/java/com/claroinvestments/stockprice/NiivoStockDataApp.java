@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -57,8 +58,11 @@ public class NiivoStockDataApp {
     
 	final private StopWatch stopWatch = StopWatch.createStarted();
 	
+	AtomicLong id;
+	
 	public void init() throws IOException {
 		log.info("Execution started");
+		id = new AtomicLong(Optional.ofNullable(historicalStockPriceRepository.getMaxId()).orElse(1L));
 	}
 	
 	@Transactional
@@ -73,8 +77,6 @@ public class NiivoStockDataApp {
 		List<StockFileDownloadResult> nseStockFileDownloadResults = downloadNse(fromDate, toDate);
 		stockFileDownloadResults.addAll(nseStockFileDownloadResults);
 		
-//		List<StockFileDownloadResult> stockFileDownloadResults = getStockFileDownloadResultsFromFileSystem();
-		
 		if(overwrite) {
 			mapAndSave(stockFileDownloadResults, fromDate, toDate, true);
 		} else {
@@ -87,19 +89,6 @@ public class NiivoStockDataApp {
 			mapAndWriteToFile(stockFileDownloadResults, historicalStockPricesOutputFile, fromDate, toDate, false);
 		}
 	}
-	
-//	private List<StockFileDownloadResult> getStockFileDownloadResultsFromFileSystem() {
-//		List<StockFileDownloadResult> stockFileDownloadResults = new ArrayList<StockFileDownloadResult>();
-//		for(File downloadFile:downloadDir.listFiles()) {
-//			String stockPriceFileLoc = downloadFile.getAbsolutePath();
-//			System.out.println(downloadFile.getName());
-//			String ticker = downloadFile.getName().split(Pattern.quote("."))[0];
-//			String exchangeName = downloadFile.getName().split(Pattern.quote("."))[1];
-//			StockFileDownloadResult stockFileDownloadResult = new StockFileDownloadResult(stockPriceFileLoc, ticker, exchangeName);
-//			stockFileDownloadResults.add(stockFileDownloadResult);
-//		}
-//		return stockFileDownloadResults;
-//	}
 	
 	private void cleanDownloadDir() throws IOException{
 		if(downloadDir.exists()) {
@@ -145,8 +134,15 @@ public class NiivoStockDataApp {
 			}
 		});
 		
+		
 		log.info("Saving " + historicalStockPrices.size() + " Historical Stock Prices, out of which " + newData.get() + " are new and " + existingData.get() + " are existing");
+		historicalStockPrices.forEach(h -> {
+			if(Objects.isNull(h.getId())) {
+				h .setId(id.getAndIncrement());	
+			}
+		});
 		historicalStockPriceRepository.saveAll(historicalStockPrices);
+		
 		log.info("Done");
 	}
 	
@@ -173,6 +169,12 @@ public class NiivoStockDataApp {
 			Collection<HistoricalStockPrice> downloadedHistoricalStockPricesForTicker = result.get();
 			log.info("Mapping " + count + " of " + total);
 			Integer noOfDownloadedHistoricalStockPricesForTicker = downloadedHistoricalStockPricesForTicker.size();
+			downloadedHistoricalStockPricesForTicker.forEach(h -> {
+				if(Objects.isNull(h.getId())) {
+					h .setId(id.getAndIncrement());	
+				}
+			});
+			
 			totalCount += noOfDownloadedHistoricalStockPricesForTicker;
 			historicalStockPricesSaveList.addAll(downloadedHistoricalStockPricesForTicker);
 			log.info("Total processed " + totalCount);

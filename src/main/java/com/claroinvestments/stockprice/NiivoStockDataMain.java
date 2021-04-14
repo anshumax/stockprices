@@ -1,6 +1,8 @@
 package com.claroinvestments.stockprice;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.temporal.TemporalAdjusters;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,18 +25,22 @@ public class NiivoStockDataMain implements CommandLineRunner{
 	
 	@Override
 	public void run(String... args) throws Exception {
+		LocalDate startLimitDate = LocalDate.of(2000, 1, 1);
+		LocalDate today = LocalDate.now();
+		
 		ExecutionType executionType = ExecutionType.valueOf(args[0]);
 		switch(executionType) {
 		case DAILY: 
-			LocalDate dailyRunStartDate = LocalDate.now().minusDays(noOfDaysBack);
-			LocalDate dailyRunEndDate = LocalDate.now().minusDays(1);
+			LocalDate lastSundayOfTheMonth = today.with(TemporalAdjusters.lastInMonth(DayOfWeek.SUNDAY));
+			LocalDate dailyRunStartDate = today.isEqual(lastSundayOfTheMonth) ? startLimitDate : today.minusDays(noOfDaysBack);
+			LocalDate dailyRunEndDate = today.minusDays(1);
 			niivoStockDataApp.init();
 			niivoStockDataApp.execute(dailyRunStartDate, dailyRunEndDate, true);
 			niivoStockDataApp.shutdown();
 			break;
 		case HISTORICAL:
-			LocalDate historicalStartDate = LocalDate.of(2000, 1, 1);
-			LocalDate historicalEndDate = LocalDate.now().minusDays(1);
+			LocalDate historicalStartDate = startLimitDate;
+			LocalDate historicalEndDate = today.minusDays(1);
 			niivoStockDataApp.init();
 			niivoStockDataApp.execute(historicalStartDate, historicalEndDate, false);
 			niivoStockDataApp.shutdown();

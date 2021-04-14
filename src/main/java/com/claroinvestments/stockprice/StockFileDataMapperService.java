@@ -18,7 +18,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import javax.annotation.PostConstruct;
@@ -49,11 +48,9 @@ public class StockFileDataMapperService{
 	final ZoneId ZONE_ID_IST = ZoneId.of(ZoneId.SHORT_IDS.get("IST"));
 	
 	JsonParser jsonParser;
-	AtomicLong id;
 	
 	@PostConstruct
 	public void init(){
-		 id = new AtomicLong(Optional.ofNullable(historicalStockPriceRepository.getMaxId()).orElse(1L));
 		 jsonParser = new JsonParser();
 	}
 	
@@ -227,12 +224,11 @@ public class StockFileDataMapperService{
 		for(LocalDate date:dates) {
 			if(originalHistoricalStockPriceMap.containsKey(date)) {
 				HistoricalStockPrice originalHistoricalStockPrice = originalHistoricalStockPriceMap.get(date);
-				originalHistoricalStockPrice.setId(id.getAndIncrement());
 				addedHistoricalStockPrices.add(originalHistoricalStockPrice);
 				lastFetchedHistoricalStockPrice = originalHistoricalStockPrice;
 			}else {
 				HistoricalStockPrice addedBenchmarkHistoricalData = new HistoricalStockPrice(
-						id.getAndIncrement(),
+						null,
 						lastFetchedHistoricalStockPrice.getTicker(),
 						lastFetchedHistoricalStockPrice.getExchange(),
 						date,
@@ -254,7 +250,9 @@ public class StockFileDataMapperService{
 		List<HistoricalStockPrice> overwrittenHistoricalStockPrices = new ArrayList<>();
 		LocalDate fromDate = startDate.minusDays(10);
 		LocalDate toDate = endDate;
-		Map<LocalDate, HistoricalStockPrice> storedHistoricalStockPriceMap = historicalStockPriceRepository.findByExchangeAndTickerAndDateBetween(exchange, ticker, fromDate, toDate).stream().collect(Collectors.toMap(h -> h.getDate(), h -> h));
+		List<HistoricalStockPrice> dbDatas = historicalStockPriceRepository.findByExchangeAndTickerAndDateBetween(exchange, ticker, fromDate, toDate);
+		log.info("Found " + dbDatas.size() + " for " + ticker + "|" + exchange + " from " + fromDate + " to " + toDate);
+		Map<LocalDate, HistoricalStockPrice> storedHistoricalStockPriceMap = dbDatas.stream().collect(Collectors.toMap(h -> h.getDate(), h -> h));
 		for(HistoricalStockPrice fetchedHistoricalStockPrice:fetchedHistoricalStockPrices) {
 			LocalDate fetchedHistoricalStockPriceDate = fetchedHistoricalStockPrice.getDate();
 			Long id = Optional.ofNullable(storedHistoricalStockPriceMap.get(fetchedHistoricalStockPriceDate)).map(s -> s.getId()).orElse(null);
