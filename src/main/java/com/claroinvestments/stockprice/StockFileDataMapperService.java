@@ -1,5 +1,18 @@
 package com.claroinvestments.stockprice;
 
+import com.claroinvestments.stockprice.db.HistoricalStockPrice;
+import com.claroinvestments.stockprice.db.HistoricalStockPriceRepository;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import com.google.gson.stream.JsonReader;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+
 import java.io.IOException;
 import java.io.StringReader;
 import java.math.BigDecimal;
@@ -8,34 +21,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
+import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
-
-import javax.annotation.PostConstruct;
-
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.annotation.Async;
-import org.springframework.scheduling.annotation.AsyncResult;
-import org.springframework.stereotype.Service;
-
-import com.claroinvestments.stockprice.db.HistoricalStockPrice;
-import com.claroinvestments.stockprice.db.HistoricalStockPriceRepository;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonParser;
-import com.google.gson.stream.JsonReader;
 
 @Service
 public class StockFileDataMapperService{
@@ -47,20 +36,12 @@ public class StockFileDataMapperService{
 	
 	final ZoneId ZONE_ID_IST = ZoneId.of(ZoneId.SHORT_IDS.get("IST"));
 	
-	JsonParser jsonParser;
-	
-	@PostConstruct
-	public void init(){
-		 jsonParser = new JsonParser();
-	}
-	
-	@Async
-	public Future<Collection<HistoricalStockPrice>> getHistoricalStockPrices(String jsonString, String ticker, String exchange, LocalDate startDate, LocalDate endDate, boolean overwrite){
+	public Collection<HistoricalStockPrice> getHistoricalStockPrices(String jsonString, String ticker, String exchange, LocalDate startDate, LocalDate endDate, boolean overwrite){
 		try {
 			Map<Integer, HistoricalStockPrice> historicalStockPricesMap = new HashMap<>();
 			JsonReader jsonReader = new JsonReader(new StringReader(jsonString));
 			jsonReader.setLenient(true);
-			JsonObject chartObject = jsonParser.parse(jsonReader).getAsJsonObject().get("chart").getAsJsonObject();
+			JsonObject chartObject = JsonParser.parseReader(jsonReader).getAsJsonObject().get("chart").getAsJsonObject();
 			JsonElement error = chartObject.get("error");
 			if (!error.isJsonNull()) {
 				String codeString, descriptionString = null;
@@ -92,9 +73,9 @@ public class StockFileDataMapperService{
 			if(Objects.isNull(timeStamps) || timeStamps.size() == 0) {
 				throw new IOException("Invalid timestamp: " + (Objects.isNull(timeStamps) ? "null" : "Size " + timeStamps.size()));
 			}
-			Integer noOfTimeStamps = timeStamps.size();
+			int noOfTimeStamps = timeStamps.size();
 			for(int idx = 0; idx < timeStamps.size() ; idx++) {
-				Long timeStamp = timeStamps.get(idx).getAsLong();
+				long timeStamp = timeStamps.get(idx).getAsLong();
 				LocalDate quoteDate = LocalDateTime.from(Instant.ofEpochSecond(timeStamp).atZone(ZONE_ID_IST)).toLocalDate();
 				historicalStockPricesMap.put(idx, new HistoricalStockPrice(ticker, exchange, quoteDate));
 			}
@@ -195,31 +176,32 @@ public class StockFileDataMapperService{
 				historicalStockPrice.setAdjustedClosePrice(adjClosePrice.isJsonNull() ? previousAdjClose : adjClosePrice.getAsBigDecimal().setScale(2, RoundingMode.HALF_UP));
 				previousAdjClose = historicalStockPrice.getAdjustedClosePrice();
 			}
-			List<HistoricalStockPrice> historicalStockPrices = addForAbsentDates(historicalStockPricesMap.values(), startDate, endDate);
+
+			List<HistoricalStockPrice> historicalStockPrices = addForAbsentDates(historicalStockPricesMap.values(), endDate);
 			if(overwrite) {
 				historicalStockPrices = overwriteExistingBenchmarkHistoricalDatas(historicalStockPrices, exchange, ticker, startDate, endDate);
 			}
 			log.info("Retrieved " + historicalStockPrices.size() + " historical prices for " + ticker + "|" + exchange);
-			return new AsyncResult<Collection<HistoricalStockPrice>>(historicalStockPrices);
+			return historicalStockPrices;
 		}catch(Exception e) {
 			log.error("Unable to retrieve historical price information for " + ticker + "|" + exchange + ": " + e.getMessage());
-			return new AsyncResult<Collection<HistoricalStockPrice>>(Collections.emptyList());
+			return Collections.emptyList();
 		}
 	}
 	
-	private List<HistoricalStockPrice> addForAbsentDates(Collection<HistoricalStockPrice> originalHistoricalStockPrices, LocalDate startDate, LocalDate endDate) throws IOException{
+	private List<HistoricalStockPrice> addForAbsentDates(Collection<HistoricalStockPrice> originalHistoricalStockPrices,LocalDate endDate) throws IOException{
 		List<HistoricalStockPrice> addedHistoricalStockPrices = new ArrayList<>();
 		
 		LinkedHashMap<LocalDate, HistoricalStockPrice> originalHistoricalStockPriceMap = originalHistoricalStockPrices
 				.stream()
 				.sorted((b1,b2) -> b1.getDate().compareTo(b2.getDate()))
-				.collect(Collectors.toMap(b -> b.getDate(), b -> b, (b1,b2) -> b1, () -> new LinkedHashMap<>()));
+				.collect(Collectors.toMap(HistoricalStockPrice::getDate, b -> b, (b1, b2) -> b1, LinkedHashMap::new));
 		
-		LocalDate firstDate = originalHistoricalStockPrices.stream().map(b -> b.getDate()).min((d1,d2) -> d1.compareTo(d2))
+		LocalDate firstDate = originalHistoricalStockPrices.stream().map(HistoricalStockPrice::getDate).min(LocalDate::compareTo)
 				.orElseThrow(() -> new IOException("Unable to get first date"));
 		HistoricalStockPrice lastFetchedHistoricalStockPrice = originalHistoricalStockPriceMap.get(firstDate);
 		
-		List<LocalDate> dates = firstDate.datesUntil(endDate.plusDays(1)).collect(Collectors.toList());
+		List<LocalDate> dates = firstDate.datesUntil(endDate.plusDays(1)).toList();
 		
 		for(LocalDate date:dates) {
 			if(originalHistoricalStockPriceMap.containsKey(date)) {
@@ -249,13 +231,12 @@ public class StockFileDataMapperService{
 	protected List<HistoricalStockPrice> overwriteExistingBenchmarkHistoricalDatas(List<HistoricalStockPrice> fetchedHistoricalStockPrices, String exchange, String ticker, LocalDate startDate, LocalDate endDate) {
 		List<HistoricalStockPrice> overwrittenHistoricalStockPrices = new ArrayList<>();
 		LocalDate fromDate = startDate.minusDays(10);
-		LocalDate toDate = endDate;
-		List<HistoricalStockPrice> dbDatas = historicalStockPriceRepository.findByExchangeAndTickerAndDateBetween(exchange, ticker, fromDate, toDate);
-		log.info("Found " + dbDatas.size() + " for " + ticker + "|" + exchange + " from " + fromDate + " to " + toDate);
-		Map<LocalDate, HistoricalStockPrice> storedHistoricalStockPriceMap = dbDatas.stream().collect(Collectors.toMap(h -> h.getDate(), h -> h));
+		List<HistoricalStockPrice> dbDatas = historicalStockPriceRepository.findByExchangeAndTickerAndDateBetween(exchange, ticker, fromDate, endDate);
+		log.info("Found " + dbDatas.size() + " for " + ticker + "|" + exchange + " from " + fromDate + " to " + endDate);
+		Map<LocalDate, HistoricalStockPrice> storedHistoricalStockPriceMap = dbDatas.stream().collect(Collectors.toMap(HistoricalStockPrice::getDate, h -> h));
 		for(HistoricalStockPrice fetchedHistoricalStockPrice:fetchedHistoricalStockPrices) {
 			LocalDate fetchedHistoricalStockPriceDate = fetchedHistoricalStockPrice.getDate();
-			Long id = Optional.ofNullable(storedHistoricalStockPriceMap.get(fetchedHistoricalStockPriceDate)).map(s -> s.getId()).orElse(null);
+			Long id = Optional.ofNullable(storedHistoricalStockPriceMap.get(fetchedHistoricalStockPriceDate)).map(HistoricalStockPrice::getId).orElse(null);
 			HistoricalStockPrice overwrittenHistoricalStockPrice = new HistoricalStockPrice(
 					id,
 					fetchedHistoricalStockPrice.getTicker(),

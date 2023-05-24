@@ -5,10 +5,10 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.Id;
-import javax.persistence.Table;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "historical_stock_prices")
@@ -17,7 +17,7 @@ public class HistoricalStockPrice implements Serializable{
 	private static final long serialVersionUID = -7702016658803902313L;
 	
 	@Id
-	@Column(name = "id")
+	@Column(name = "ID")
 	private Long id;
 	@Column(name = "TICKER")
 	private String ticker;

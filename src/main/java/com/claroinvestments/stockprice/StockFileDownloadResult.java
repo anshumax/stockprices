@@ -31,5 +31,13 @@ public class StockFileDownloadResult {
 	public void setExchangeName(String exchangeName) {
 		this.exchangeName = exchangeName;
 	}
-	
+
+	@Override
+	public String toString() {
+		return "StockFileDownloadResult{" +
+				"stockPriceFileLoc='" + stockPriceFileLoc + '\'' +
+				", ticker='" + ticker + '\'' +
+				", exchangeName='" + exchangeName + '\'' +
+				'}';
+	}
 }
