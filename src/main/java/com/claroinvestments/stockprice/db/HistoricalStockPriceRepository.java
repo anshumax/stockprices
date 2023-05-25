@@ -1,6 +1,7 @@
 package com.claroinvestments.stockprice.db;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
@@ -9,7 +10,7 @@ import java.sql.PreparedStatement;
 import java.time.LocalDate;
 import java.util.List;
 
-public interface HistoricalStockPriceRepository extends JpaRepository<HistoricalStockPrice, Integer> {
+public interface HistoricalStockPriceRepository extends JpaRepository<HistoricalStockPrice, Integer>, JpaSpecificationExecutor<HistoricalStockPrice> {
 
 	List<HistoricalStockPrice> findByExchangeAndTickerAndDateBetween(String exchange, String ticker, LocalDate fromDate, LocalDate endDate);
 	
