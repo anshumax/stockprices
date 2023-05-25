@@ -2,8 +2,8 @@
 
 LOG_DATE=$(date +%Y%m%d)
 SCRIPT_DIR=$(dirname $0)
-CONF_FILE="${HOME}/conf/env.sh"
-. ${CONF_FILE}
+ENV_FILE="${HOME}/conf/env.sh"
+. ${ENV_FILE}
 
 LOG_FILE="${SCRIPT_DIR}/logs/stock-data-data-${LOG_DATE}.log"
 
