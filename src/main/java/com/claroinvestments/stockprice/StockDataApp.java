@@ -93,7 +93,6 @@ public class StockDataApp {
 		List<HistoricalStockPrice> historicalStockPrices = new ArrayList<>();
 		int total = stockFileDownloadResults.size(), count = 1;;
 		log.info("Processing " + total + " tickers");
-		List<Future<Collection<HistoricalStockPrice>>> results = new ArrayList<>();
 		for(StockFileDownloadResult stockFileDownloadResult:stockFileDownloadResults) {
 			String stockPriceFileLoc = stockFileDownloadResult.getStockPriceFileLoc();
 			String ticker = stockFileDownloadResult.getTicker();

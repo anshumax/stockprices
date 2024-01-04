@@ -44,20 +44,13 @@ public class StockFileDataMapperService{
 			JsonObject chartObject = JsonParser.parseReader(jsonReader).getAsJsonObject().get("chart").getAsJsonObject();
 			JsonElement error = chartObject.get("error");
 			if (!error.isJsonNull()) {
-				String codeString, descriptionString = null;
-				
-				JsonElement code = error.getAsJsonObject().get("code");
-				if(Objects.isNull(code)) {
-					throw new IOException("No 'code' found in 'error'");
-				}else {
-					codeString = code.getAsString();
-				}
-				JsonElement description = error.getAsJsonObject().get("code");
-				if(Objects.isNull(description)) {
-					throw new IOException("No 'description' found in 'error'");
-				}else {
-					descriptionString = description.getAsString();
-				}
+
+				String codeString = Optional.ofNullable(error.getAsJsonObject().get("code")).map(c -> c.getAsString())
+						.orElseThrow(() -> new IOException("No 'code' found in 'error'"));
+
+				String descriptionString = Optional.ofNullable(error.getAsJsonObject().get("description")).map(c -> c.getAsString())
+						.orElseThrow(() -> new IOException("No 'description' found in 'error'"));
+
 				throw new IOException("Unable to retrieve data: " + codeString + "|" + descriptionString);
 			}
 			JsonArray results = chartObject.getAsJsonArray("result");
@@ -65,35 +58,34 @@ public class StockFileDataMapperService{
 			    throw new IOException("result missing from Json body");
 			}
 			JsonObject result = results.get(0).getAsJsonObject();
-			if(!result.has("timestamp")) {
-				throw new IOException("No timestamps found");
+			JsonArray timeStamps = Optional.ofNullable(result.get("timestamp")).map(r -> r.getAsJsonArray())
+					.orElseThrow(() -> new IOException("No timestamps found"));
+
+			if(Objects.isNull(timeStamps) || timeStamps.isEmpty()) {
+				throw new IOException("Invalid timestamp: " + (Objects.isNull(timeStamps) ? "null" : "Empty list"));
 			}
-			
-			JsonArray timeStamps = result.get("timestamp").getAsJsonArray();
-			if(Objects.isNull(timeStamps) || timeStamps.size() == 0) {
-				throw new IOException("Invalid timestamp: " + (Objects.isNull(timeStamps) ? "null" : "Size " + timeStamps.size()));
-			}
+
 			int noOfTimeStamps = timeStamps.size();
 			for(int idx = 0; idx < timeStamps.size() ; idx++) {
 				long timeStamp = timeStamps.get(idx).getAsLong();
 				LocalDate quoteDate = LocalDateTime.from(Instant.ofEpochSecond(timeStamp).atZone(ZONE_ID_IST)).toLocalDate();
 				historicalStockPricesMap.put(idx, new HistoricalStockPrice(ticker, exchange, quoteDate));
 			}
-			JsonObject indicators = result.get("indicators").getAsJsonObject();
-			if(Objects.isNull(indicators)) {
-				throw new IOException("indicators is null");
-			}
-			JsonElement quotes = indicators.get("quote");
-			if(Objects.isNull(quotes)) {
-				throw new IOException("quote is null");
-			}
+
+			JsonObject indicators = Optional.ofNullable(result.get("indicators")).map(r -> r.getAsJsonObject())
+					.orElseThrow(() -> new IOException("'indicators' is null"));
+
+			JsonObject quotes = Optional.ofNullable(result.get("quote")).map(r -> r.getAsJsonObject())
+					.orElseThrow(() -> new IOException("'quote' is null"));
+
 			JsonArray highs = quotes.getAsJsonArray().get(0).getAsJsonObject().get("high").getAsJsonArray();
-			if(Objects.isNull(highs) || highs.size() == 0) {
-				throw new IOException("Invalid highs: " + (Objects.isNull(highs) ? "null" : "Size " + highs.size()));
+			if(Objects.isNull(highs) || highs.isEmpty()) {
+				throw new IOException("Invalid highs: " + (Objects.isNull(highs) ? "null" : "Empty list"));
 			}
 			if(highs.size() != noOfTimeStamps) {
 				throw new IOException("Count of highs (" + highs.size() + ") is not same as timestamps (" + noOfTimeStamps + ")");
 			}
+
 			BigDecimal previousHighPrice = BigDecimal.ZERO;
 			for(int idx = 0; idx < highs.size() ; idx++) {
 				HistoricalStockPrice historicalStockPrice = historicalStockPricesMap.get(idx);
@@ -103,7 +95,7 @@ public class StockFileDataMapperService{
 			}
 		
 			JsonArray lows = quotes.getAsJsonArray().get(0).getAsJsonObject().get("low").getAsJsonArray();
-			if(Objects.isNull(lows) || lows.size() == 0) {
+			if(Objects.isNull(lows) || lows.isEmpty()) {
 				throw new IOException("Invalid lows: " + (Objects.isNull(lows) ? "null" : "Size " + highs.size()));
 			}
 			if(lows.size() != noOfTimeStamps) {
@@ -118,7 +110,7 @@ public class StockFileDataMapperService{
 			}
 			
 			JsonArray opens = quotes.getAsJsonArray().get(0).getAsJsonObject().get("open").getAsJsonArray();
-			if(Objects.isNull(opens) || opens.size() == 0) {
+			if(Objects.isNull(opens) || opens.isEmpty()) {
 				throw new IOException("Invalid opens: " + (Objects.isNull(opens) ? "null" : "Size " + opens.size()));
 			}
 			if(opens.size() != noOfTimeStamps) {
@@ -133,7 +125,7 @@ public class StockFileDataMapperService{
 			}
 			
 			JsonArray volumes = quotes.getAsJsonArray().get(0).getAsJsonObject().get("volume").getAsJsonArray();
-			if(Objects.isNull(volumes) || volumes.size() == 0) {
+			if(Objects.isNull(volumes) || volumes.isEmpty()) {
 				throw new IOException("Invalid volumes: " + (Objects.isNull(volumes) ? "null" : "Size " + volumes.size()));
 			}
 			if(volumes.size() != noOfTimeStamps) {
@@ -148,7 +140,7 @@ public class StockFileDataMapperService{
 			}
 			
 			JsonArray closes = quotes.getAsJsonArray().get(0).getAsJsonObject().get("close").getAsJsonArray();
-			if(Objects.isNull(closes) || closes.size() == 0) {
+			if(Objects.isNull(closes) || closes.isEmpty()) {
 				throw new IOException("Invalid closes: " + (Objects.isNull(closes) ? "null" : "Size " + closes.size()));
 			}
 			if(closes.size() != noOfTimeStamps) {
@@ -194,7 +186,7 @@ public class StockFileDataMapperService{
 		
 		LinkedHashMap<LocalDate, HistoricalStockPrice> originalHistoricalStockPriceMap = originalHistoricalStockPrices
 				.stream()
-				.sorted((b1,b2) -> b1.getDate().compareTo(b2.getDate()))
+				.sorted(Comparator.comparing(HistoricalStockPrice::getDate))
 				.collect(Collectors.toMap(HistoricalStockPrice::getDate, b -> b, (b1, b2) -> b1, LinkedHashMap::new));
 		
 		LocalDate firstDate = originalHistoricalStockPrices.stream().map(HistoricalStockPrice::getDate).min(LocalDate::compareTo)
