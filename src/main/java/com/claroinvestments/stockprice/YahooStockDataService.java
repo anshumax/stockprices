@@ -18,7 +18,6 @@ import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.text.MessageFormat;
 import java.time.*;
-import java.util.Objects;
 import java.util.TimeZone;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -60,23 +59,25 @@ public class YahooStockDataService {
 			String url = MessageFormat.format(YAHOO_FINANCE_URL_TEMPLATE, ticker, exchangeShort, Long.toString(fromTimeStamp), Long.toString(toTimeStamp));
 
 			HttpGet getRequest = new HttpGet(url);
-			String responseBody = httpClient.execute(getRequest, response -> {
-				log.info("URL: " + url + " -> " + response.getCode());
-				return EntityUtils.toString(response.getEntity());
+			Response response = httpClient.execute(getRequest, httpResponse -> {
+				int statusCode = httpResponse.getCode();
+				log.info("URL: " + url + " -> " + statusCode);
+				return new Response(statusCode, EntityUtils.toString(httpResponse.getEntity()));
 			});
 
-			while(Objects.isNull(responseBody)){
+			while(response.code() == HttpResponseStatus.TOO_MANY_REQUESTS.code()){
 				log.info("Sleeping 60 seconds because received: " + HttpResponseStatus.TOO_MANY_REQUESTS);
 				Thread.sleep(60000);
 				refreshHttpClient();
-				responseBody = httpClient.execute(getRequest, response -> {
-					log.info("URL: " + url + " -> " + response.getCode());
-					return EntityUtils.toString(response.getEntity());
+				response = httpClient.execute(getRequest, httpResponse -> {
+					int statusCode = httpResponse.getCode();
+					log.info("URL: " + url + " -> " + statusCode);
+					return new Response(statusCode, EntityUtils.toString(httpResponse.getEntity()));
 				});
 			}
 
 			File downloadFile = new File(downloadDir, fileName);
-			Files.writeString(downloadFile.toPath(), responseBody, Charset.defaultCharset());
+			Files.writeString(downloadFile.toPath(), response.responseBody(), Charset.defaultCharset());
 			return new StockFileDownloadResult(downloadFile.getAbsolutePath(), ticker, exchangeName);
 		}catch(Exception e) {
 			log.error("Unable to download for ticker " + ticker + "." + exchangeShort, e);
@@ -93,4 +94,6 @@ public class YahooStockDataService {
 			return null;
 		});
 	}
+
+	record Response(int code, String responseBody){}
 }
