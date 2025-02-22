@@ -54,6 +54,7 @@ public class StockFileDataMapperService{
 				throw new IOException("Unable to retrieve data: " + codeString + "|" + descriptionString);
 			}
 			JsonArray results = chartObject.getAsJsonArray("result");
+
 			if (results == null || results.size() != 1) {
 			    throw new IOException("result missing from Json body");
 			}
@@ -71,14 +72,13 @@ public class StockFileDataMapperService{
 				LocalDate quoteDate = LocalDateTime.from(Instant.ofEpochSecond(timeStamp).atZone(ZONE_ID_IST)).toLocalDate();
 				historicalStockPricesMap.put(idx, new HistoricalStockPrice(ticker, exchange, quoteDate));
 			}
-
 			JsonObject indicators = Optional.ofNullable(result.get("indicators")).map(r -> r.getAsJsonObject())
 					.orElseThrow(() -> new IOException("'indicators' is null"));
 
-			JsonObject quotes = Optional.ofNullable(result.get("quote")).map(r -> r.getAsJsonObject())
+			JsonObject quote = Optional.ofNullable(indicators.get("quote")).map(r -> r.getAsJsonArray().get(0).getAsJsonObject())
 					.orElseThrow(() -> new IOException("'quote' is null"));
 
-			JsonArray highs = quotes.getAsJsonArray().get(0).getAsJsonObject().get("high").getAsJsonArray();
+			JsonArray highs = quote.get("high").getAsJsonArray();
 			if(Objects.isNull(highs) || highs.isEmpty()) {
 				throw new IOException("Invalid highs: " + (Objects.isNull(highs) ? "null" : "Empty list"));
 			}
@@ -94,7 +94,7 @@ public class StockFileDataMapperService{
 				previousHighPrice = historicalStockPrice.getHighPrice();
 			}
 		
-			JsonArray lows = quotes.getAsJsonArray().get(0).getAsJsonObject().get("low").getAsJsonArray();
+			JsonArray lows = quote.get("low").getAsJsonArray();
 			if(Objects.isNull(lows) || lows.isEmpty()) {
 				throw new IOException("Invalid lows: " + (Objects.isNull(lows) ? "null" : "Size " + highs.size()));
 			}
@@ -109,7 +109,7 @@ public class StockFileDataMapperService{
 				previousLowPrice = historicalStockPrice.getLowPrice();
 			}
 			
-			JsonArray opens = quotes.getAsJsonArray().get(0).getAsJsonObject().get("open").getAsJsonArray();
+			JsonArray opens = quote.get("open").getAsJsonArray();
 			if(Objects.isNull(opens) || opens.isEmpty()) {
 				throw new IOException("Invalid opens: " + (Objects.isNull(opens) ? "null" : "Size " + opens.size()));
 			}
@@ -124,7 +124,7 @@ public class StockFileDataMapperService{
 				previousOpen = historicalStockPrice.getOpen();
 			}
 			
-			JsonArray volumes = quotes.getAsJsonArray().get(0).getAsJsonObject().get("volume").getAsJsonArray();
+			JsonArray volumes = quote.get("volume").getAsJsonArray();
 			if(Objects.isNull(volumes) || volumes.isEmpty()) {
 				throw new IOException("Invalid volumes: " + (Objects.isNull(volumes) ? "null" : "Size " + volumes.size()));
 			}
@@ -139,7 +139,7 @@ public class StockFileDataMapperService{
 				previousVolume = historicalStockPrice.getVolume();
 			}
 			
-			JsonArray closes = quotes.getAsJsonArray().get(0).getAsJsonObject().get("close").getAsJsonArray();
+			JsonArray closes = quote.get("close").getAsJsonArray();
 			if(Objects.isNull(closes) || closes.isEmpty()) {
 				throw new IOException("Invalid closes: " + (Objects.isNull(closes) ? "null" : "Size " + closes.size()));
 			}
@@ -176,7 +176,7 @@ public class StockFileDataMapperService{
 			log.info("Retrieved " + historicalStockPrices.size() + " historical prices for " + ticker + "|" + exchange);
 			return historicalStockPrices;
 		}catch(Exception e) {
-			log.error("Unable to retrieve historical price information for " + ticker + "|" + exchange + ": " + e.getMessage());
+			log.error("Unable to retrieve historical price information for " + ticker + "|" + exchange, e);
 			return Collections.emptyList();
 		}
 	}
